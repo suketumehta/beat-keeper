@@ -93,6 +93,23 @@ input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:36px}
 .hist div{display:flex;justify-content:space-between;gap:10px;background:var(--chip);border-radius:10px;padding:7px 10px;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
 .hist span{color:var(--muted);font-weight:700}
 .tab[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.prog{position:sticky;top:12px;align-self:start;display:flex;flex-direction:column;gap:12px}
+.prog h3{font-family:var(--display);font-size:22px;margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-weight:800;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:4px;border-radius:2px;background:var(--c)}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
+.stats div{background:var(--chip);border-radius:12px;padding:10px;font-weight:800;font-size:12px;color:var(--muted)}
+.stats b{display:block;font-family:var(--display);font-size:28px;color:var(--ink);line-height:1.1;font-variant-numeric:tabular-nums}
+.tbest{display:grid;gap:6px;margin-top:6px}
+.tbest div{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:var(--chip);border-radius:10px;padding:8px 10px;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+.tbest .bar{height:8px;background:var(--panel);border-radius:4px;overflow:hidden}
+.tbest .bar i{display:block;height:100%;border-radius:4px}
+.tbest .up{color:var(--perfect);font-size:12.5px}
+.days{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:3px;margin-top:6px}
+.days span{aspect-ratio:1;border-radius:6px;background:var(--chip);display:grid;place-items:center;font-size:10px;font-weight:800;color:var(--muted)}
+.days span.on{background:var(--perfect);color:#06240f}
+.days span.today{outline:2px solid var(--accent)}
 .tuner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center}
 .tnote{font-family:var(--display);font-weight:800;font-size:clamp(90px,14vw,150px);line-height:.9;transition:color .2s}
 .tnote.in{color:var(--perfect)}
@@ -111,7 +128,7 @@ input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:36px}
 .note{color:var(--muted);font-weight:700;font-size:13.5px;margin:8px 0 0}
 [hidden]{display:none!important}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-@media (max-width:880px){.stage{grid-template-columns:minmax(0,1fr)}.metro,.tuner{order:-1;min-height:420px;position:static}}
+@media (max-width:880px){.stage{grid-template-columns:minmax(0,1fr)}.metro,.tuner,.prog{order:-1;min-height:420px;position:static}}
 @media (max-width:520px){.facts{grid-template-columns:repeat(2,1fr)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -120,7 +137,7 @@ input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:36px}
 <div class="app">
   <header class="bar">
     <h1>Beat <span>Keeper</span></h1>
-    <div class="chips"><button class="pill tab" id="tabBeat" aria-pressed="true">Beat</button><button class="pill tab" id="tabTune" aria-pressed="false">Tuner</button><button class="pill" id="calBtn">Calibrate</button></div>
+    <div class="chips"><button class="pill tab" id="tabBeat" aria-pressed="true">Beat</button><button class="pill tab" id="tabTune" aria-pressed="false">Tuner</button><button class="pill tab" id="tabProg" aria-pressed="false">Progress</button><button class="pill" id="calBtn">Calibrate</button></div>
   </header>
   <main class="stage">
     <section class="card" id="panel"></section>
@@ -134,6 +151,7 @@ input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:36px}
       <div class="meterlbl">Microphone</div>
       <div class="meter"><i id="lvl"></i></div>
     </section>
+    <section class="card prog" id="prog" hidden></section>
     <section class="card tuner" id="tuner" hidden>
       <div class="tnote" id="tnote">–</div>
       <div class="thz" id="thz">Play one string</div>
@@ -373,6 +391,7 @@ function onStrum(m){
   live(g==='perfect'?'Perfect!':a<6?'Right on it!':`${g==='good'?'Good':g==='ok'?'Close':'Off'}: ${a} ms ${off<0?'early':'late'}`,g);
 }
 function stopRun(silent){
+  if(run&&run.kind==='metro'&&ctx){const secs=Math.round(ctx.currentTime-run.t0);if(secs>=15){H.list.unshift({d:Date.now(),p:S.player,bpm:S.bpm,kind:'metro',score:null,dur:secs});H.list=H.list.slice(0,500);store('bk-history',H)}}
   clearInterval(schedT);viz.on=false;listeners.delete(onStrum);run=null;
   $('ring').textContent='–';$('ring').classList.remove('ghost');$('arm').setAttribute('transform','rotate(0)');phase('Ready');live('');
   document.querySelectorAll('.dot').forEach(d=>d.className=d.className.replace(/\b(now|first|perfect|good|ok|off)\b/g,'').trim());
@@ -382,7 +401,7 @@ function finishRun(){
   const r=run;clearInterval(schedT);viz.on=false;listeners.delete(onStrum);run=null;
   $('ring').textContent='✓';$('ring').classList.remove('ghost');$('arm').setAttribute('transform','rotate(0)');phase('Done!');
   const res=computeResults(r.offsets,r.extras,r.step*1000);
-  H.list.unshift({d:Date.now(),p:S.player,bpm:S.bpm,pat:S.pattern,ghost:S.ghost,bars:S.bars,score:res.score});H.list=H.list.slice(0,60);store('bk-history',H);
+  H.list.unshift({d:Date.now(),p:S.player,bpm:S.bpm,pat:S.pattern,ghost:S.ghost,bars:S.bars,score:res.score,dur:Math.round(r.nTargets*r.step+r.bpb*r.spb)});H.list=H.list.slice(0,500);store('bk-history',H);
   results(res,r);
 }
 
@@ -452,17 +471,71 @@ function tunerPanel(){
     else if(b.id==='resetT'){T.done={};tunerPanel()}};
 }
 async function setMode(m){
-  if(m==='tune'){if(!(await initAudio()))return;if(run)stopRun(true)}
+  if(m==='tune'){if(!(await initAudio()))return}
+  if(m!=='beat'&&run)stopRun(true);
   S.mode=m;save();
-  $('tabBeat').setAttribute('aria-pressed',m==='beat');$('tabTune').setAttribute('aria-pressed',m==='tune');
-  $('metro').hidden=m!=='beat';$('tuner').hidden=m!=='tune';$('calBtn').hidden=m!=='beat';
-  if(m==='tune'){lastStatus=['',''];tunerPanel();tunerStart();showTune(null)}else{tunerStop();home()}
+  $('tabBeat').setAttribute('aria-pressed',m==='beat');$('tabTune').setAttribute('aria-pressed',m==='tune');$('tabProg').setAttribute('aria-pressed',m==='prog');
+  $('metro').hidden=m!=='beat';$('tuner').hidden=m!=='tune';$('prog').hidden=m!=='prog';$('calBtn').hidden=m!=='beat';
+  if(m!=='tune')tunerStop();
+  if(m==='tune'){lastStatus=['',''];tunerPanel();tunerStart();showTune(null)}else if(m==='prog')progress();else home();
 }
-$('tabBeat').onclick=()=>setMode('beat');$('tabTune').onclick=()=>setMode('tune');
+$('tabBeat').onclick=()=>setMode('beat');$('tabTune').onclick=()=>setMode('tune');$('tabProg').onclick=()=>setMode('prog');
+
+/* ---------- progress ---------- */
+const PAL=['#5ec8ff','#ffb347','#4cd38a','#ff7b9c','#b197fc','#ffd166','#38d9a9'];
+const dayKey=t=>{const d=new Date(t);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()};
+const durOf=h=>h.dur||(h.score!=null?Math.round((h.bars||8)*4*60/(h.bpm||80)):0);
+function progStats(p){
+  const L=H.list.filter(h=>h.p===p),scored=L.filter(h=>h.score!=null);
+  const days=new Set(L.map(h=>dayKey(h.d)));let streak=0;const d=new Date();d.setHours(12);
+  if(!days.has(dayKey(d)))d.setDate(d.getDate()-1);
+  while(days.has(dayKey(d))){streak++;d.setDate(d.getDate()-1)}
+  const mins=Math.round(L.reduce((a,h)=>a+durOf(h),0)/60);
+  const week=Date.now()-7*864e5,weekMins=Math.round(L.filter(h=>h.d>=week).reduce((a,h)=>a+durOf(h),0)/60);
+  const groups={};for(const h of scored){const k=h.bpm+'|'+(h.pat||'quarter');(groups[k]=groups[k]||[]).push(h)}
+  const tempos=Object.entries(groups).map(([k,a])=>{const [bpm,pat]=k.split('|');const chron=[...a].sort((x,y)=>x.d-y.d);const last3=chron.slice(-3);
+    const avg3=last3.reduce((x,h)=>x+h.score,0)/last3.length;return {k,bpm:+bpm,pat,rounds:a.length,best:Math.max(...a.map(h=>h.score)),last:chron[chron.length-1].score,ready:last3.length>=3&&avg3>=85,chron}}).sort((a,b)=>b.pat.localeCompare(a.pat)||a.bpm-b.bpm);
+  return {L,scored,days,streak,mins,weekMins,tempos};
+}
+function progChart(st){
+  const pts=[...st.scored].sort((a,b)=>a.d-b.d).slice(-40);
+  if(!pts.length)return '<p class="note">Play a scored round and your progress chart starts here.</p>';
+  const W=640,Hh=260,L=40,R=14,T=14,B=36,n=pts.length,x=i=>L+(n>1?i*(W-L-R)/(n-1):(W-L-R)/2),y=v=>T+(100-v)/100*(Hh-T-B);
+  const keys=[...new Set(pts.map(h=>h.bpm+'|'+(h.pat||'quarter')))].sort((a,b)=>{const [ab,ap]=a.split('|'),[bb,bp]=b.split('|');return bp.localeCompare(ap)||ab-bb});
+  const col=k=>PAL[keys.indexOf(k)%PAL.length];
+  let s=`<div class="chartwrap"><svg class="chart" viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Scores over time">`;
+  for(const v of [0,25,50,75,100])s+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${y(v)+4}" fill="var(--muted)" font-size="11" text-anchor="end" font-family="Nunito,system-ui">${v}</text>`;
+  s+=`<rect x="${L}" y="${y(100)}" width="${W-L-R}" height="${y(85)-y(100)}" fill="var(--perfect)" opacity=".08"/>`;
+  let lastDay='',lastX=-99;pts.forEach((h,i)=>{const dk=dayKey(h.d);if(dk!==lastDay&&x(i)-lastX>=52){lastDay=dk;lastX=x(i);s+=`<line x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${Hh-B}" stroke="var(--line)" stroke-dasharray="2 4"/><text x="${x(i)+2}" y="${Hh-B+16}" fill="var(--muted)" font-size="11" font-family="Nunito,system-ui">${new Date(h.d).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</text>`}});
+  for(const k of keys){const idx=pts.map((h,i)=>[h,i]).filter(([h])=>h.bpm+'|'+(h.pat||'quarter')===k);
+    if(idx.length>1)s+=`<polyline points="${idx.map(([h,i])=>`${x(i).toFixed(1)},${y(h.score).toFixed(1)}`).join(' ')}" fill="none" stroke="${col(k)}" stroke-width="2.5" stroke-linejoin="round"/>`;
+    for(const [h,i] of idx)s+=`<circle cx="${x(i).toFixed(1)}" cy="${y(h.score).toFixed(1)}" r="${i===n-1?6:4.5}" fill="${col(k)}" stroke="var(--panel)" stroke-width="1.5"/>`}
+  s+='</svg></div>';
+  s+=`<div class="legend">${keys.map(k=>{const [b,p]=k.split('|');return `<span style="--c:${col(k)}"><i></i>${b} BPM${p==='eighth'?' down-up':''}</span>`}).join('')}</div>`;
+  return s;
+}
+function progress(){
+  const st=progStats(S.player);
+  const today=new Date();today.setHours(12);let cal='';for(let i=13;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);cal+=`<span class="${st.days.has(dayKey(d))?'on':''} ${i===0?'today':''}" title="${d.toDateString()}">${d.getDate()}</span>`}
+  $('panel').innerHTML=`<h2>${S.player}'s progress</h2>
+    <div class="lbl">Player</div>
+    <div class="chips">${['Arjun','Madhavi','Guest'].map(p=>`<button class="chip" data-pplayer="${p}" aria-pressed="${S.player===p}">${p}</button>`).join('')}</div>
+    <div class="stats"><div><b>${st.streak}</b>day streak</div><div><b>${st.weekMins}</b>minutes this week</div><div><b>${st.mins}</b>minutes total</div><div><b>${st.scored.length}</b>scored rounds</div></div>
+    <div class="lbl">Last 2 weeks</div><div class="days">${cal}</div>
+    <p class="note">Green days are days he practiced. Practicing a little every day builds the streak.</p>
+    <div class="lbl">Best score at each tempo</div>
+    ${st.tempos.length?`<div class="tbest">${st.tempos.map(t=>`<div><span>${t.bpm}${t.pat==='eighth'?' ↕':''}</span><span class="bar"><i style="width:${t.best}%;background:${t.best>=85?'var(--perfect)':t.best>=65?'var(--ok)':'var(--off)'}"></i></span><span>${t.best}</span></div>${t.ready?`<div style="display:block;background:none;padding:0 4px"><span class="up">Ready to move up to ${t.bpm+10} BPM!</span></div>`:''}`).join('')}</div><p class="note">↕ = down-up strumming. “Ready to move up” shows after 3 rounds in a row averaging 85 or more.</p>`:'<p class="note">No scored rounds yet.</p>'}`;
+  $('panel').onclick=e=>{const b=e.target.closest('[data-pplayer]');if(!b)return;S.player=b.dataset.pplayer;save();progress()};
+  const recent=[...st.scored].sort((a,b)=>b.d-a.d).slice(0,8);
+  $('prog').innerHTML=`<h3>Scores over time</h3>${progChart(st)}
+    <div class="lbl">Latest rounds</div>
+    ${recent.length?`<div class="hist">${recent.map(h=>`<div><span>${new Date(h.d).toLocaleDateString(undefined,{month:'short',day:'numeric'})} ${new Date(h.d).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})} · ${h.bpm} BPM · ${h.pat==='eighth'?'down-up':'down'}${h.ghost?' · ghost':''}</span>${h.score}</div>`).join('')}</div>`:'<p class="note">Nothing yet.</p>'}
+    <p class="note">Scores are saved on this iPad only.</p>`;
+}
 
 /* ---------- screens ---------- */
-function histHTML(){const L=H.list.filter(h=>h.p===S.player).slice(0,6);if(!L.length)return '<p class="note">Scores you earn show up here.</p>';
-  const best=Math.max(...H.list.filter(h=>h.p===S.player&&h.bpm===S.bpm&&h.pat===S.pattern).map(h=>h.score),0);
+function histHTML(){const L=H.list.filter(h=>h.p===S.player&&h.score!=null).slice(0,6);if(!L.length)return '<p class="note">Scores you earn show up here.</p>';
+  const best=Math.max(...H.list.filter(h=>h.p===S.player&&h.score!=null&&h.bpm===S.bpm&&h.pat===S.pattern).map(h=>h.score),0);
   return `${best?`<p class="note" style="margin-top:0">Best at ${S.bpm} BPM: <b style="color:var(--ink)">${best}</b></p>`:''}<div class="hist">${L.map(h=>`<div><span>${new Date(h.d).toLocaleDateString(undefined,{month:'short',day:'numeric'})} · ${h.bpm} BPM · ${h.pat==='eighth'?'down-up':'down'}${h.ghost?' · ghost':''}</span>${h.score}</div>`).join('')}</div>`}
 function home(){
   const playing=!!run;
